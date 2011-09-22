@@ -18,38 +18,55 @@
 #include <stdio.h> 
 #include <stdlib.h>
 #include <string.h>
-
+#include <errno.h>
 #include <unistd.h>
 
 #include <clang-c/Index.h>
 
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof(*a))
+
+#ifndef offsetof
+#define offsetof(st, m) ((size_t) ( (char *)&((st *)(0))->m - (char *)0 ))
+#endif
+
 #define container_of(ptr,type,member) ((char *)(ptr) - offsetof(type,member))
 
 #define CPRA_NAME "cpra"
 #define CPRA_VERSION "0.0.0"
 
+void *cpra_alloc(size_t size)
+{
+  void *ret;
+
+  if((ret=malloc(size)) == NULL) {
+    perror("FATAL: malloc() failed");
+    exit(2);
+  }
+
+  return ret;
+}
+
 struct ll {
-  struct ll *n,*p;
+  struct ll *next,*prev;
 };
 
-void ll_inject(struct ll *e,struct ll *p,struct ll *n)
+void ll_inject(struct ll *elem,struct ll *prev,struct ll *next)
 {
-  n->p=e;
-  p->n=e;
-  e->n=n;
-  e->p=p;  
+  next->prev=elem;
+  prev->next=elem;
+  elem->next=next;
+  elem->prev=prev;  
 }
 
-void ll_rem(struct ll *e)
+void ll_rem(struct ll *elem)
 {
-  e->p->n=e->n;
-  e->n->p=e->p;
+  elem->prev->next=elem->next;
+  elem->next->prev=elem->prev;
 }
 
-#define ll_init(e)        ll_inject((e), (e),     (e))
-#define ll_prepend(lst,e) ll_inject((e), (lst),   (lst)->n)
-#define ll_append(lst,e)  ll_inject((e), (lst)->p,(lst))
+#define ll_init(e)        ll_inject((e), (e),        (e))
+#define ll_prepend(lst,e) ll_inject((e), (lst),      (lst)->next)
+#define ll_append(lst,e)  ll_inject((e), (lst)->prev,(lst))
 
 struct ll* ll_traverse(struct ll *list, void *data, 
 		       int (callback)(struct ll*,void*))
@@ -57,7 +74,7 @@ struct ll* ll_traverse(struct ll *list, void *data,
   struct ll *next=list,*tmp;
 
   do {
-    tmp=next->n;
+    tmp=next->next;
     if(callback(next,data) == 0)
       return next;
     next=tmp;
@@ -69,11 +86,58 @@ struct ll* ll_traverse(struct ll *list, void *data,
 
 /* -- */
 
-struct element {
-  XCursor cursor;
+struct cpra_element {
+  CXCursor cursor;
 
   struct ll link;
 };
+
+/* how many different elements can there be to display */
+enum cpra_element_id {
+  CPRA_ELEM_FUNC=0,
+  CPRA_ELEM_STRUCT,
+  CPRA_ELEM_TYPE,
+  CPRA_ELEM_VAR,
+  CPRA_ELEM_COUNT
+};
+static struct cpra_element cpra_elements[CPRA_ELEM_COUNT]={};
+
+void cpra_element_add(struct cpra_element *cel, CXCursor cursor)
+{
+  struct cpra_element *elem;
+
+  if(!cel)
+    return;
+
+  elem=cpra_alloc(sizeof(*cel));
+  elem->cursor=cursor;
+  ll_append(&cel->link,&elem->link);
+}
+
+void cpra_element_pop(struct cpra_element *cel)
+{
+  struct cpra_element *elem=
+    (struct cpra_element *)container_of(cel->link.prev,
+					struct cpra_element,link);
+  ll_rem(&elem->link);
+  free(elem);
+}
+
+static int cpra_element_display_cb(struct ll* list,void *data)
+{
+  struct cpra_element *elem=data;
+
+  const char * s4r = clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(elem->cursor)));
+
+  printf("elem %p cursorkind %s\n",elem,s4r);
+
+  return 1;
+}
+
+void cpra_element_display(struct cpra_element *cel)
+{
+  ll_traverse(&cel->link,cel,cpra_element_display_cb);
+}
 
 void testprog()
 {
@@ -119,7 +183,6 @@ enum cpra_opts {
 static char * const cpra_opt_enabled="enabled";
 static char *cpra_opts_status[CPRA_OPT_COUNT];
 
-/* sizeof(CPRA_CMDLINE_OPTS)]; */
 
 void cpra_version_quit()
 {
@@ -198,6 +261,11 @@ enum CXChildVisitResult cb(CXCursor cursor,
 	   cursor.kind,s4r,str,clang_isCursorDefinition(cursor),s3r,
 	   s2r,line,col);
 
+  if(clang_getCursorKind(cursor) == CXCursor_FunctionDecl) {
+    cpra_element_add(&cpra_elements[CPRA_ELEM_FUNC],cursor);
+    
+  }
+
   return CXChildVisit_Recurse;
 }
 
@@ -205,8 +273,12 @@ enum CXChildVisitResult cb(CXCursor cursor,
 int main(int argc, const char * const argv[])
 {
   int clang_argc=cpra_cmdline_parse(argc,argv);
+  int i;
 
-  testprog();
+  /* testprog(); */
+
+  for(i=0;i<CPRA_ELEM_COUNT;i++)
+    ll_init(&cpra_elements[i].link);
 
   CXIndex ci = clang_createIndex(1,1);
 
@@ -217,6 +289,9 @@ int main(int argc, const char * const argv[])
   clang_visitChildren(clang_getTranslationUnitCursor(ctu),
 		      cb,NULL);
   
+  printf("\nDisplaying elements\n");
+  cpra_element_display(&cpra_elements[CPRA_ELEM_FUNC]);
+
   clang_disposeTranslationUnit(ctu);
   clang_disposeIndex(ci);
 

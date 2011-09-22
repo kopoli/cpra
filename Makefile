@@ -2,9 +2,9 @@
 PROG=cpra
 SRC=cpra.c
 
-CFLAGS=-Wall
+CFLAGS=-Wall -W -ggdb
 LDFLAGS=-L/usr/lib/llvm -lclang
-CC=clang
+CC=gcc
 
 all: $(PROG)
 
