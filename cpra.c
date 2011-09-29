@@ -123,6 +123,31 @@ void cpra_element_pop(struct cpra_element *cel)
   free(elem);
 }
 
+/*
+  Tulostetaan:
+
+  Yleisesti:
+  -mitä kieltä käytetään: clang_getCursorLanguage
+
+  Jokaisesta
+  -nimi clang_getCursorDisplayName
+  -tiedosto:rivi:sarake clang_getCursorLocation
+                        clang_getSpellingLocation
+  -onko määrittely: clang_isCursorDefinition
+
+  funktioista:
+  -paluuarvon tyyppi clang_getCursorResultType
+
+  metodeista:
+  -luokka
+
+  (globaaleista) muuttujista:
+  -tyyppi
+  -(onko globaali) clang_getCursorSemanticParent == ctu
+
+*/
+
+
 static int cpra_element_display_cb(struct ll* list,void *data)
 {
   struct cpra_element *elem=data;
@@ -151,7 +176,7 @@ void testprog()
   exit(7);
 }
 
-static char *const CPRA_CMDLINE_OPTS="cfstva:w:hV";
+static char *const CPRA_CMDLINE_OPTS="cfstvma:w:hV";
 
 static char * const cpra_opt_help[] = {
   "syntax check",
@@ -159,6 +184,7 @@ static char * const cpra_opt_help[] = {
   "list structs/classes",
   "list types/enums",
   "list static variables",
+  "list macros",
   "run code completion",
   "file:line:col",
   "where is element used",
@@ -173,6 +199,7 @@ enum cpra_opts {
   CPRA_OPT_STRUCTS,
   CPRA_OPT_TYPES,
   CPRA_OPT_VARIABLES,
+  CPRA_OPT_MACROS,
   CPRA_OPT_COMPLETE,
   CPRA_OPT_WHEREIS,
   CPRA_OPT_HELP,
@@ -263,7 +290,7 @@ enum CXChildVisitResult cb(CXCursor cursor,
 
   if(clang_getCursorKind(cursor) == CXCursor_FunctionDecl) {
     cpra_element_add(&cpra_elements[CPRA_ELEM_FUNC],cursor);
-    
+    printf("LÖYTYI!!!!!\n");
   }
 
   return CXChildVisit_Recurse;
@@ -283,8 +310,13 @@ int main(int argc, const char * const argv[])
   CXIndex ci = clang_createIndex(1,1);
 
   CXTranslationUnit ctu = 
+    clang_parseTranslationUnit(ci,NULL,argv+clang_argc,argc-clang_argc,
+			       NULL,0,
+			       CXTranslationUnit_DetailedPreprocessingRecord);
+    /*
     clang_createTranslationUnitFromSourceFile(ci,NULL,argc-clang_argc,
 					      argv+clang_argc,0,NULL);
+    */
 
   clang_visitChildren(clang_getTranslationUnitCursor(ctu),
 		      cb,NULL);

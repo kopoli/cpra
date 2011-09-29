@@ -1,6 +1,8 @@
 
 #include "header.h"
 
+#define ROUTAVAURIO 77
+
 static void *jeejee;
 
 typedef void loppu;

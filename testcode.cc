@@ -9,6 +9,12 @@ public:
 
   static int muumi();
 
+  int m_value;
+
+};
+
+struct Toinen {
+  int arvo;
 };
 
 Jotain::Jotain() {

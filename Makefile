@@ -4,7 +4,7 @@ SRC=cpra.c
 
 CFLAGS=-Wall -W -ggdb
 LDFLAGS=-L/usr/lib/llvm -lclang
-CC=gcc
+CC=clang
 
 all: $(PROG)
 
