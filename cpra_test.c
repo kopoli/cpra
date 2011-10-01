@@ -53,9 +53,19 @@ static int cpra_test_runner(cpra_test *tests,int count)
 /* the actual test suite */
 
 struct ll_test {
-  int data;
-  struct ll link;
+  int d;
+  struct ll l;
 };
+
+int lt_cb(struct ll* l,void* d)
+{
+  struct ll_test *lt = (struct ll_test *)container_of(l,struct ll_test,l);
+  int *ptr = (int*)d;
+  
+  *ptr += lt->d;
+  printf("Taalla! ptr on %d ja d %d\n",*ptr,lt->d);
+  return 1;
+}
 
 #define MAIN_CPRA_SUITE(T)				\
   T(first,{CPRA_ASSERT(0);})				\
@@ -67,13 +77,16 @@ T(second,{CPRA_ASSERT(1);})				\
     CPRA_ASSERT(a.next == &b && b.prev == &a);		\
     CPRA_ASSERT(b.next == &a && a.prev == &b);		\
     ll_rem(&b);						\
-    CPRA_ASSERT((a.next == &a && a.prev == &a ));	\
+    CPRA_ASSERT((a.next == &a && a.prev == &a ));)	\
+  T(ll_traverse_test,					\
+    int val=0;						\
+    struct ll_test a,b;					\
+    a.d=1; b.d=2;					\
+    ll_init(&a.l); ll_append(&a.l,&b.l);		\
+    ll_traverse(&a.l,&val,lt_cb);			\
+    CPRA_ASSERT(val == a.d+b.d);)
 
-  T(ll_traverse_test,
-    
-    )
 
-)
 
 CPRA_SUITE_GENERATE(MAIN_CPRA_SUITE)
 

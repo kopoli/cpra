@@ -76,6 +76,8 @@ struct ll* ll_traverse(struct ll *list, void *data,
 
   do {
     tmp=next->next;
+    /* printf("listptr %p next %p tmp %p\n",list,next,tmp); */
+
     if(callback(next,data) == 0)
       return next;
     next=tmp;
