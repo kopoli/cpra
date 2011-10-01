@@ -67,6 +67,7 @@ void ll_rem(struct ll *elem)
 #define ll_init(e)        ll_inject((e), (e),        (e))
 #define ll_prepend(lst,e) ll_inject((e), (lst),      (lst)->next)
 #define ll_append(lst,e)  ll_inject((e), (lst)->prev,(lst))
+#define ll_empty(lst)     ((lst)->next == (lst))
 
 struct ll* ll_traverse(struct ll *list, void *data, 
 		       int (callback)(struct ll*,void*))
@@ -100,18 +101,23 @@ enum cpra_element_id {
   CPRA_ELEM_VAR,
   CPRA_ELEM_COUNT
 };
-static struct cpra_element cpra_elements[CPRA_ELEM_COUNT]={};
+static struct cpra_element *cpra_elements[CPRA_ELEM_COUNT]={};
 
-void cpra_element_add(struct cpra_element *cel, CXCursor cursor)
+void cpra_element_add(struct cpra_element **cel, CXCursor cursor)
 {
   struct cpra_element *elem;
 
-  if(!cel)
-    return;
-
   elem=cpra_alloc(sizeof(*cel));
-  elem->cursor=cursor;
-  ll_append(&cel->link,&elem->link);
+  memcpy(&elem->cursor,&cursor,sizeof(cursor));
+
+  printf("kind %d ja kind %d\n",elem->cursor.kind,cursor.kind);
+   
+  if(*cel == NULL) {
+    ll_init(&elem->link);
+    *cel=elem;
+  }
+  else
+    ll_append(&(*cel)->link,&elem->link);
 }
 
 void cpra_element_pop(struct cpra_element *cel)
@@ -147,14 +153,23 @@ void cpra_element_pop(struct cpra_element *cel)
 
 */
 
+static CXCursorSet cs;
+
 
 static int cpra_element_display_cb(struct ll* list,void *data)
 {
-  struct cpra_element *elem=data;
+  /* struct cpra_element *elem=data; */
 
-  const char * s4r = clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(elem->cursor)));
+  struct cpra_element *elem=
+    (struct cpra_element *)container_of(list,
+					struct cpra_element,link);
 
-  printf("elem %p cursorkind %s\n",elem,s4r);
+  /* const char * s4r = clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(elem->cursor))); */
+
+  /* printf("elem %p cursorkind %s\n",elem,s4r); */
+
+  printf("onko listassa %d kind %d\n",clang_CXCursorSet_contains(cs,elem->cursor),
+	 clang_getCursorKind(elem->cursor));
 
   return 1;
 }
@@ -265,7 +280,6 @@ int cpra_cmdline_parse(int argc, const char * const argv[])
   return optind;
 }
 
-
 enum CXChildVisitResult cb(CXCursor cursor,
 			   CXCursor parent,
 			   CXClientData client_data)
@@ -290,12 +304,16 @@ enum CXChildVisitResult cb(CXCursor cursor,
 
   if(clang_getCursorKind(cursor) == CXCursor_FunctionDecl) {
     cpra_element_add(&cpra_elements[CPRA_ELEM_FUNC],cursor);
-    printf("LÖYTYI!!!!!\n");
+    clang_CXCursorSet_insert(cs,cursor);
+    printf("LÖYTYI!!!!! ja kind %d\n",clang_getCursorKind(cursor));
   }
 
   return CXChildVisit_Recurse;
 }
 
+#ifdef CPRA_TESTING
+#include "cpra_test.c"
+#endif
 
 int main(int argc, const char * const argv[])
 {
@@ -304,8 +322,10 @@ int main(int argc, const char * const argv[])
 
   /* testprog(); */
 
-  for(i=0;i<CPRA_ELEM_COUNT;i++)
-    ll_init(&cpra_elements[i].link);
+  /* for(i=0;i<CPRA_ELEM_COUNT;i++) */
+  /*   ll_init(&cpra_elements[i].link); */
+
+  cs=clang_createCXCursorSet();
 
   CXIndex ci = clang_createIndex(1,1);
 
@@ -322,8 +342,9 @@ int main(int argc, const char * const argv[])
 		      cb,NULL);
   
   printf("\nDisplaying elements\n");
-  cpra_element_display(&cpra_elements[CPRA_ELEM_FUNC]);
+  cpra_element_display(cpra_elements[CPRA_ELEM_FUNC]);
 
+  clang_disposeCXCursorSet(cs);
   clang_disposeTranslationUnit(ctu);
   clang_disposeIndex(ci);
 
