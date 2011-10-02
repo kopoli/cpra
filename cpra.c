@@ -113,6 +113,7 @@ enum cpra_element_id {
   CPRA_ELEM_STRUCT,
   CPRA_ELEM_TYPE,
   CPRA_ELEM_VAR,
+  CPRA_ELEM_MACRO,
   CPRA_ELEM_COUNT
 };
 static struct cpra_element *cpra_elements[CPRA_ELEM_COUNT]={};
@@ -177,30 +178,27 @@ void cpra_element_rm_all(struct cpra_element *cel)
 
   metodeista:
   -luokka
+  -onko se periytetty clang_getOverriddenCursors
 
   (globaaleista) muuttujista:
   -tyyppi
   -(onko globaali) clang_getCursorSemanticParent == ctu
 
+  Includeista
+  -tiedostonnimi clang_getIncludedFile
+
 */
-
-static CXCursorSet cs;
-
 
 static int cpra_element_display_cb(struct ll* list,void *data)
 {
-  /* struct cpra_element *elem=data; */
-
   struct cpra_element *elem=
     (struct cpra_element *)container_of(list,
 					struct cpra_element,link);
 
-  /* const char * s4r = clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(elem->cursor))); */
+  const char * s4r = clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(elem->cursor)));
+const char * s3r = clang_getCString(clang_getCursorDisplayName(elem->cursor));
 
-  /* printf("elem %p cursorkind %s\n",elem,s4r); */
-
-  printf("onko listassa %d kind %d\n",clang_CXCursorSet_contains(cs,elem->cursor),
-	 clang_getCursorKind(elem->cursor));
+ printf("elem %p cursorkind %s spelling: %s\n",elem,s4r,s3r);
 
   return 1;
 }
@@ -326,6 +324,8 @@ enum CXChildVisitResult cb(CXCursor cursor,
 			   CXCursor parent,
 			   CXClientData client_data)
 {
+
+#if 0
   const char * str = clang_getCString(clang_getTypeKindSpelling(clang_getCursorType(cursor).kind));
   /* const char * s3r = clang_getCString(clang_getCursorUSR(cursor)); */
   const char * s3r = clang_getCString(clang_getCursorDisplayName(cursor));
@@ -346,9 +346,59 @@ enum CXChildVisitResult cb(CXCursor cursor,
 
   if(clang_getCursorKind(cursor) == CXCursor_FunctionDecl) {
     cpra_element_add(&cpra_elements[CPRA_ELEM_FUNC],cursor);
-    clang_CXCursorSet_insert(cs,cursor);
     printf("LÖYTYI!!!!! ja kind %d\n",clang_getCursorKind(cursor));
   }
+#endif
+
+  enum cpra_element_id cid=CPRA_ELEM_COUNT;
+  unsigned int line, col;
+  CXFile f;
+  CXString str;
+  CXSourceLocation loc = clang_getCursorLocation(cursor);
+
+  /* do not include compiler defaults */
+  clang_getSpellingLocation(loc,&f,&line,&col,NULL);
+  str=clang_getFileName(f);
+  if(!clang_getCString(str)) {
+    clang_disposeString(str);
+    return CXChildVisit_Continue;
+  }
+  clang_disposeString(str);
+
+  switch(cursor.kind) {
+  case CXCursor_FunctionDecl:
+  case CXCursor_CXXMethod:
+    cid=CPRA_ELEM_FUNC;
+    break;
+
+  case CXCursor_StructDecl:
+  case CXCursor_UnionDecl:
+  case CXCursor_ClassDecl:
+    cid=CPRA_ELEM_STRUCT;
+    break;
+    
+  case CXCursor_EnumDecl:
+  case CXCursor_TypedefDecl:
+    cid=CPRA_ELEM_TYPE;
+    break;
+
+  case CXCursor_VarDecl:
+  case CXCursor_ParmDecl:
+  case CXCursor_FieldDecl:
+    cid=CPRA_ELEM_VAR;
+    break;
+
+  case CXCursor_MacroDefinition:
+    cid=CPRA_ELEM_MACRO;
+
+  default:
+    break;
+  }
+
+  if(cid != CPRA_ELEM_COUNT) {
+    printf("adding element %d ",cid);
+    cpra_element_add(&cpra_elements[cid],cursor);
+  }  
 
   return CXChildVisit_Recurse;
 }
@@ -361,22 +411,19 @@ enum CXChildVisitResult cb(CXCursor cursor,
 
 int main(int argc, const char * const argv[])
 {
-  int clang_argc=cpra_cmdline_parse(argc,argv);
   int i;
+  int clang_argc=cpra_cmdline_parse(argc,argv);
 
   /* testprog(); */
-
-  /* for(i=0;i<CPRA_ELEM_COUNT;i++) */
-  /*   ll_init(&cpra_elements[i].link); */
-
-  cs=clang_createCXCursorSet();
-
+  
   CXIndex ci = clang_createIndex(1,1);
 
   CXTranslationUnit ctu = 
     clang_parseTranslationUnit(ci,NULL,argv+clang_argc,argc-clang_argc,
 			       NULL,0,
 			       CXTranslationUnit_DetailedPreprocessingRecord);
+  
+
     /*
     clang_createTranslationUnitFromSourceFile(ci,NULL,argc-clang_argc,
 					      argv+clang_argc,0,NULL);
@@ -388,7 +435,14 @@ int main(int argc, const char * const argv[])
   printf("\nDisplaying elements\n");
   cpra_element_display(cpra_elements[CPRA_ELEM_FUNC]);
 
-  clang_disposeCXCursorSet(cs);
+  for(i=0;i<CPRA_ELEM_COUNT;i++) {
+    if(!cpra_elements[i])
+      continue;
+    
+    cpra_element_display(cpra_elements[i]);
+    cpra_element_rm_all(cpra_elements[i]);
+  }
+
   clang_disposeTranslationUnit(ctu);
   clang_disposeIndex(ci);
 

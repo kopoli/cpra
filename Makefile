@@ -2,9 +2,9 @@
 PROG=cpra cpra_test
 SRC=cpra.c
 
-CFLAGS=-Wall -W -ggdb
+CFLAGS=-Wall -ggdb -O0 -Werror
 LDFLAGS=-L/usr/lib/llvm -lclang
-CC=clang
+CC=gcc
 
 LINKCMD=$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
 
