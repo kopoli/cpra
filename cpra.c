@@ -86,6 +86,19 @@ struct ll* ll_traverse(struct ll *list, void *data,
   return NULL;
 }
 
+int ll_length_cb(struct ll *link, void *data)
+{
+  (*((int *)data))++;
+  return 1;
+}
+
+int ll_length(struct ll* list)
+{
+  int count=0;
+  ll_traverse(list,&count,ll_length_cb);
+  return count;
+}
+
 
 /* -- */
 
