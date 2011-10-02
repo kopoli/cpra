@@ -76,7 +76,6 @@ struct ll* ll_traverse(struct ll *list, void *data,
 
   do {
     tmp=next->next;
-    /* printf("listptr %p next %p tmp %p\n",list,next,tmp); */
 
     if(callback(next,data) == 0)
       return next;
@@ -234,8 +233,8 @@ static char * const cpra_opt_help[] = {
   "list macros",
   "run code completion",
   "file:line:col",
-  "where is element used",
-  "[type|class|func|var|constant]",
+  "where is the element used",
+  "type|class|func|var|constant",
   "display this help",
   "display program version"
 };
@@ -260,10 +259,16 @@ static char *cpra_opts_status[CPRA_OPT_COUNT];
 
 void cpra_version_quit()
 {
-  printf("%s v.%s\nBuilt: %s %s\n",CPRA_NAME,CPRA_VERSION,__DATE__,__TIME__);
+  printf("%s v.%s\nBuilt: %s %s\n",CPRA_NAME,CPRA_VERSION,
+	 __DATE__,__TIME__);
   exit(1);
 }
 
+/**
+ * @brief Displays the help text and exits the program 
+ *
+ * @param name The name of the run program. eg. argv[0].
+ */
 void cpra_help_quit(const char *const name)
 {
   unsigned int i;
@@ -283,6 +288,11 @@ void cpra_help_quit(const char *const name)
   exit(1);
 }
 
+/**
+ * @brief Parses the command line. The enabled options are saved at the array
+ * cpra_opts_status.
+ * @return The number of the first non-option argument.
+ */
 int cpra_cmdline_parse(int argc, const char * const argv[])
 {
   int opt,i,limit=ARRAY_SIZE(cpra_opts_status);
