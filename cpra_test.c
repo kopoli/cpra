@@ -95,9 +95,20 @@ int lt_cb(struct ll* l,void* d)
     a.d=1; b.d=2;					\
     ll_init(&a.l); ll_append(&a.l,&b.l);		\
     ll_traverse(&a.l,&val,lt_cb);			\
-    CPRA_ASSERT(val == a.d+b.d);)
-
-
+    CPRA_ASSERT(val == a.d+b.d);			\
+    CPRA_ASSERT(ll_length(&a.l) == 2);)			\
+							\
+  T(cpra_element_test,					\
+    struct cpra_element *cel=NULL;			\
+    CXCursor c={};					\
+    cpra_element_add(&cel,c);				\
+    CPRA_ASSERT(cel != NULL);				\
+    CPRA_ASSERT(ll_length(&cel->link) == 1);		\
+    cpra_element_add(&cel,c);				\
+    CPRA_ASSERT(ll_length(&cel->link) == 2);		\
+    cpra_element_pop(cel);				\
+    CPRA_ASSERT(ll_length(&cel->link) == 1);		\
+    cpra_element_pop(cel);)
 
 CPRA_SUITE_GENERATE(MAIN_CPRA_SUITE)
 

@@ -122,10 +122,10 @@ void cpra_element_add(struct cpra_element **cel, CXCursor cursor)
 {
   struct cpra_element *elem;
 
-  elem=cpra_alloc(sizeof(*cel));
+  elem=cpra_alloc(sizeof(*elem));
   memcpy(&elem->cursor,&cursor,sizeof(cursor));
 
-  printf("kind %d ja kind %d\n",elem->cursor.kind,cursor.kind);
+  /* printf("kind %d\n",cursor.kind); */
    
   if(*cel == NULL) {
     ll_init(&elem->link);
@@ -143,6 +143,23 @@ void cpra_element_pop(struct cpra_element *cel)
   ll_rem(&elem->link);
   free(elem);
 }
+
+static int cpra_element_rm_cb(struct ll* list,void *data)
+{
+  struct cpra_element *elem=
+    (struct cpra_element *)container_of(list,
+					struct cpra_element,link);
+
+  ll_rem(&elem->link);
+  free(elem);
+  return 1;
+}
+
+void cpra_element_rm_all(struct cpra_element *cel)
+{
+  ll_traverse(&cel->link,cel,cpra_element_rm_cb);
+}
+
 
 /*
   Tulostetaan:
