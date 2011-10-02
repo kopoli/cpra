@@ -10,10 +10,10 @@ LINKCMD=$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
 
 all: $(PROG)
 
-cpra: $(SRC)
+cpra: $(SRC) Makefile
 	$(LINKCMD)
 
-cpra_test: $(SRC)
+cpra_test: $(SRC) cpra_test.c Makefile
 	$(LINKCMD) -DCPRA_TESTING
 
 test: cpra_test
