@@ -314,8 +314,10 @@ enum CXChildVisitResult cb(CXCursor cursor,
 }
 
 #ifdef CPRA_TESTING
+
 #include "cpra_test.c"
-#endif
+
+#else 
 
 int main(int argc, const char * const argv[])
 {
@@ -352,3 +354,5 @@ int main(int argc, const char * const argv[])
 
   return 0;
 }
+
+#endif

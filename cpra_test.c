@@ -1,14 +1,8 @@
 #include <stdio.h>
 
-/* test suite functionality */
+/* test suite interface */
 
-struct {
-  int count;
-  int failed;
-} cpra_test_statistics = { };
-
-typedef int (*cpra_test)(void);
-
+/* verbose assertion */
 #define CPRA_ASSERT(test) do {					\
 if(!(test)) {							\
   fprintf(stderr,"Test \"%s\": Assert(%d) [%s] at %s\n",	\
@@ -17,16 +11,41 @@ if(!(test)) {							\
 _assert_count++;						\
 } while(0)
 
+/* generate a test suite. The SUITENAME must be a macro of the following format:
+   
+   #define SUITE(T) \
+     T(Test_name_1, Test_body_1;) \
+     T(Test_name_2, Test_body_2;) \     
+
+ */
+#define CPRA_SUITE_GENERATE(SUITENAME)					\
+  SUITENAME(CPRA_TEST)							\
+  static cpra_test _cpra_suite_##SUITENAME[] = {SUITENAME(CPRA_TEST_NAMES)};
+
+/*  run a suite generated with CPRA_SUITE_GENERATE. */
+#define CPRA_SUITE_RUN(SUITENAME)			\
+  cpra_test_runner(#SUITENAME,_cpra_suite_##SUITENAME,	\
+		   ARRAY_SIZE(_cpra_suite_##SUITENAME))
+
+
+/* test suite generation internals */
+
+struct {
+  int count;
+  int failed;
+} cpra_test_statistics = { };
+typedef int (*cpra_test)(void);
+
 #define CPRA_TEST(NAME, ...)				\
   int _cpra_test_##NAME(void) {				\
     int _assert_count=0; char *_test_name=#NAME;	\
       {__VA_ARGS__}					\
       cpra_test_statistics.count++; return 0; }
 
-static int cpra_test_runner(cpra_test *tests,int count)
+static int cpra_test_runner(char *name,cpra_test *tests,int count)
 {
   int i=0,ret=0,hasfailed=0;
-  printf("running %d tests\n",count);
+  printf("running suite %s\n",name);
 
   for(i=0;i<count;i++) {
     ret=tests[i]();
@@ -42,13 +61,6 @@ static int cpra_test_runner(cpra_test *tests,int count)
 #define CPRA_TEST_NAMES(NAME,...)  _cpra_test_##NAME,
 #define CPRA_TEST_NAMES_STR(NAME,...)  #NAME,
 
-#define CPRA_SUITE_GENERATE(SUITENAME)					\
-  SUITENAME(CPRA_TEST)							\
-  static cpra_test _cpra_suite_##SUITENAME[] = {SUITENAME(CPRA_TEST_NAMES)};
-
-#define CPRA_SUITE_RUN(SUITENAME) \
-  cpra_test_runner(_cpra_suite_##SUITENAME,ARRAY_SIZE(_cpra_suite_##SUITENAME))
-
 
 /* the actual test suite */
 
@@ -57,19 +69,17 @@ struct ll_test {
   struct ll l;
 };
 
+/* Sums the data elements  */
 int lt_cb(struct ll* l,void* d)
 {
   struct ll_test *lt = (struct ll_test *)container_of(l,struct ll_test,l);
   int *ptr = (int*)d;
   
   *ptr += lt->d;
-  printf("Taalla! ptr on %d ja d %d\n",*ptr,lt->d);
   return 1;
 }
 
 #define MAIN_CPRA_SUITE(T)				\
-  T(first,{CPRA_ASSERT(0);})				\
-T(second,{CPRA_ASSERT(1);})				\
   T(ll_init_test,					\
     struct ll a,b; ll_init(&a);				\
     CPRA_ASSERT((a.next == &a && a.prev == &a ));	\
@@ -78,6 +88,7 @@ T(second,{CPRA_ASSERT(1);})				\
     CPRA_ASSERT(b.next == &a && a.prev == &b);		\
     ll_rem(&b);						\
     CPRA_ASSERT((a.next == &a && a.prev == &a ));)	\
+							\
   T(ll_traverse_test,					\
     int val=0;						\
     struct ll_test a,b;					\
@@ -90,12 +101,8 @@ T(second,{CPRA_ASSERT(1);})				\
 
 CPRA_SUITE_GENERATE(MAIN_CPRA_SUITE)
 
-int main()
+int main(void)
 {
   return CPRA_SUITE_RUN(MAIN_CPRA_SUITE);
 }
 
-
-/* This code is included just before the real main function. Therefore disable
-   it. */
-#define main invalid_main
