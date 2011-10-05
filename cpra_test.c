@@ -108,7 +108,24 @@ int lt_cb(struct ll* l,void* d)
     CPRA_ASSERT(ll_length(&cel->link) == 2);		\
     cpra_element_pop(cel);				\
     CPRA_ASSERT(ll_length(&cel->link) == 1);		\
-    cpra_element_pop(cel);)
+    cpra_element_pop(cel);)				\
+  T(cpra_element_rm_all_test,				\
+    struct cpra_element *cel=NULL;			\
+    CXCursor c={};					\
+    cpra_element_add(&cel,c);				\
+    cpra_element_rm_all(&cel);				\
+    CPRA_ASSERT(cel == NULL);				\
+    cpra_element_add(&cel,c);				\
+    cpra_element_add(&cel,c);				\
+    cpra_element_add(&cel,c);				\
+    cpra_element_rm_all(&cel);				\
+    CPRA_ASSERT(cel == NULL);)
+
+/*
+
+
+
+*/
 
 CPRA_SUITE_GENERATE(MAIN_CPRA_SUITE)
 

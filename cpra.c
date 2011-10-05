@@ -52,6 +52,8 @@ struct ll {
 
 void ll_inject(struct ll *elem,struct ll *prev,struct ll *next)
 {
+  /* printf("injecting %p between %p and %p\n",elem,prev,next); */
+
   next->prev=elem;
   prev->next=elem;
   elem->next=next;
@@ -60,8 +62,8 @@ void ll_inject(struct ll *elem,struct ll *prev,struct ll *next)
 
 void ll_rem(struct ll *elem)
 {
-  elem->prev->next=elem->next;
-  elem->next->prev=elem->prev;
+    elem->prev->next=elem->next;
+    elem->next->prev=elem->prev;
 }
 
 #define ll_init(e)        ll_inject((e), (e),        (e))
@@ -76,6 +78,9 @@ struct ll* ll_traverse(struct ll *list, void *data,
 
   do {
     tmp=next->next;
+
+    /* printf("ll_traverse:list %p next %p, prev %p, next->next %p\n", */
+    /* 	   list,next,next->prev,tmp); */
 
     if(callback(next,data) == 0)
       return next;
@@ -118,6 +123,11 @@ enum cpra_element_id {
 };
 static struct cpra_element *cpra_elements[CPRA_ELEM_COUNT]={};
 
+struct cpra_element *cpra_element_get(struct ll* list)
+{
+  return (struct cpra_element *)container_of(list,struct cpra_element,link);
+}
+
 void cpra_element_add(struct cpra_element **cel, CXCursor cursor)
 {
   struct cpra_element *elem;
@@ -137,27 +147,31 @@ void cpra_element_add(struct cpra_element **cel, CXCursor cursor)
 
 void cpra_element_pop(struct cpra_element *cel)
 {
-  struct cpra_element *elem=
-    (struct cpra_element *)container_of(cel->link.prev,
-					struct cpra_element,link);
+  struct cpra_element *elem=cpra_element_get(cel->link.prev);
+
   ll_rem(&elem->link);
   free(elem);
 }
 
 static int cpra_element_rm_cb(struct ll* list,void *data)
 {
-  struct cpra_element *elem=
-    (struct cpra_element *)container_of(list,
-					struct cpra_element,link);
+  struct cpra_element *elem=cpra_element_get(list);
+  struct cpra_element *last=data;
 
-  ll_rem(&elem->link);
+  ll_rem(list);
   free(elem);
+
+  if(elem == last)
+    return 0;
+  
   return 1;
 }
 
-void cpra_element_rm_all(struct cpra_element *cel)
+void cpra_element_rm_all(struct cpra_element **cel)
 {
-  ll_traverse(&cel->link,cel,cpra_element_rm_cb);
+  ll_traverse(&(*cel)->link,cpra_element_get(((*cel)->link.prev)),
+	      cpra_element_rm_cb);
+  *cel=NULL;
 }
 
 
@@ -191,14 +205,29 @@ void cpra_element_rm_all(struct cpra_element *cel)
 
 static int cpra_element_display_cb(struct ll* list,void *data)
 {
-  struct cpra_element *elem=
-    (struct cpra_element *)container_of(list,
-					struct cpra_element,link);
+  struct cpra_element *elem=cpra_element_get(list);
 
   const char * s4r = clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(elem->cursor)));
-const char * s3r = clang_getCString(clang_getCursorDisplayName(elem->cursor));
+  const char * s3r = clang_getCString(clang_getCursorDisplayName(elem->cursor));
 
- printf("elem %p cursorkind %s spelling: %s\n",elem,s4r,s3r);
+  printf("elem %p cursorkind %s spelling: %s",elem,s4r,s3r);
+
+  /* display location */
+  {
+    CXSourceLocation loc = clang_getCursorLocation(elem->cursor);
+    unsigned int line,col;
+    CXFile file;
+    CXString str;
+
+    clang_getSpellingLocation(loc,&file,&line,&col,NULL);
+    str=clang_getFileName(file);
+
+    printf(" at %s %d:%d",clang_getCString(str),line,col);
+
+    clang_disposeString(str);
+  }
+
+  puts("");
 
   return 1;
 }
@@ -396,7 +425,24 @@ enum CXChildVisitResult cb(CXCursor cursor,
   }
 
   if(cid != CPRA_ELEM_COUNT) {
-    printf("adding element %d ",cid);
+    {
+      const char * str = clang_getCString(clang_getTypeKindSpelling(clang_getCursorType(cursor).kind));
+      const char * s3r = clang_getCString(clang_getCursorDisplayName(cursor));
+      const char * s4r = clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(cursor)));
+
+      CXSourceLocation loc = clang_getCursorLocation(cursor);
+      unsigned int line,col;
+      CXFile f;
+      const char *s2r;
+      clang_getSpellingLocation(loc,&f,&line,&col,NULL);
+      s2r = clang_getCString(clang_getFileName(f));
+
+      printf("kind %d:[%s] type [%s] isdef %d spelling {%s} at %s %d:%d\n",
+	     cursor.kind,s4r,str,clang_isCursorDefinition(cursor),s3r,
+	     s2r,line,col);
+    }
+
+    printf("adding element %d\n",cid);
     cpra_element_add(&cpra_elements[cid],cursor);
   }  
 
@@ -411,42 +457,67 @@ enum CXChildVisitResult cb(CXCursor cursor,
 
 int main(int argc, const char * const argv[])
 {
-  int i;
+  int display_lang=0;
+  int i,ret=0;
   int clang_argc=cpra_cmdline_parse(argc,argv);
+
+  struct {
+    int index;
+    int translation;
+  } s = {};
 
   /* testprog(); */
   
   CXIndex ci = clang_createIndex(1,1);
+  s.index=1;
 
   CXTranslationUnit ctu = 
     clang_parseTranslationUnit(ci,NULL,argv+clang_argc,argc-clang_argc,
 			       NULL,0,
 			       CXTranslationUnit_DetailedPreprocessingRecord);
-  
-
-    /*
-    clang_createTranslationUnitFromSourceFile(ci,NULL,argc-clang_argc,
-					      argv+clang_argc,0,NULL);
-    */
+  if(!ctu) {
+    fprintf(stderr,"Error: Could not create translation unit.\n"
+	    "Check that there are no more than one file to be parsed in the"
+	    " arguments\n");
+    
+    ret=1;
+    goto end;
+  }
+  s.translation=1;
 
   clang_visitChildren(clang_getTranslationUnitCursor(ctu),
 		      cb,NULL);
+
+  {
+    CXString str=clang_getTranslationUnitSpelling(ctu);
+    printf("File: %s\n",clang_getCString(str));
+    clang_disposeString(str);
+  }
   
   printf("\nDisplaying elements\n");
-  cpra_element_display(cpra_elements[CPRA_ELEM_FUNC]);
-
   for(i=0;i<CPRA_ELEM_COUNT;i++) {
     if(!cpra_elements[i])
       continue;
+
+    if(!display_lang) {
+      const char *langs[]={"unidentified","C","Objective-C","C++"};
+      
+      printf("Language: %s\n",
+	     langs[clang_getCursorLanguage(cpra_elements[i]->cursor)]);
+      
+    }
     
     cpra_element_display(cpra_elements[i]);
-    cpra_element_rm_all(cpra_elements[i]);
+    cpra_element_rm_all(&cpra_elements[i]);
   }
 
-  clang_disposeTranslationUnit(ctu);
-  clang_disposeIndex(ci);
+ end: 
+  if(s.translation)
+    clang_disposeTranslationUnit(ctu);
+  if(s.index)
+    clang_disposeIndex(ci);
 
-  return 0;
+  return ret;
 }
 
 #endif
