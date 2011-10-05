@@ -121,7 +121,10 @@ enum cpra_element_id {
   CPRA_ELEM_MACRO,
   CPRA_ELEM_COUNT
 };
+char *cpra_element_names[]={"Functions","Structures","Types",
+				"Variables","Macros"};
 static struct cpra_element *cpra_elements[CPRA_ELEM_COUNT]={};
+
 
 struct cpra_element *cpra_element_get(struct ll* list)
 {
@@ -457,7 +460,6 @@ enum CXChildVisitResult cb(CXCursor cursor,
 
 int main(int argc, const char * const argv[])
 {
-  int display_lang=0;
   int i,ret=0;
   int clang_argc=cpra_cmdline_parse(argc,argv);
 
@@ -498,16 +500,9 @@ int main(int argc, const char * const argv[])
   for(i=0;i<CPRA_ELEM_COUNT;i++) {
     if(!cpra_elements[i])
       continue;
-
-    if(!display_lang) {
-      const char *langs[]={"unidentified","C","Objective-C","C++"};
-      
-      printf("Language: %s\n",
-	     langs[clang_getCursorLanguage(cpra_elements[i]->cursor)]);
-      
-    }
     
     cpra_element_display(cpra_elements[i]);
+    printf("%s\n",cpra_element_names[i]);
     cpra_element_rm_all(&cpra_elements[i]);
   }
 
