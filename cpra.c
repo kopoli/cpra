@@ -122,7 +122,7 @@ enum cpra_element_id {
   CPRA_ELEM_INCLUDE,
   CPRA_ELEM_COUNT
 };
-char *cpra_element_names[]={"Functions","Structures","Types",
+char *cpra_element_names[]={"Functions","Records","Types",
 			    "Variables","Macros","Includes"};
 static struct cpra_element *cpra_elements[CPRA_ELEM_COUNT]={};
 
@@ -241,12 +241,25 @@ static int cpra_element_display_cb(struct ll* list,void *data)
     for(;ptrdepth>0;ptrdepth--)
       putchar('*');
   }
+  else if (id == CPRA_ELEM_STRUCT) {
+    char *type="";
+    
+    /* TODO a switch perhaps ? */
+    if(elem->cursor.kind == CXCursor_StructDecl)
+      type="Struct";
+    else if(elem->cursor.kind == CXCursor_UnionDecl)
+      type="Union";
+    else if(elem->cursor.kind == CXCursor_ClassDecl)
+      type="Class";
 
-  /* TODO display element */
+    printf(" %s",type);
+  }
+
   printf(" %s",clang_getCString(element_name));
   clang_disposeString(element_name);
 
   /* linkage */
+  if(id != CPRA_ELEM_MACRO && id != CPRA_ELEM_INCLUDE)
   {
     char *linkage[] = {"Invalid","auto","static","AnonNamespace","global"};
     /* if(clang_getCursorLinkage(elem->cursor) == CXLinkage_Internal) */
