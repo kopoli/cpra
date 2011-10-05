@@ -206,14 +206,91 @@ void cpra_element_rm_all(struct cpra_element **cel)
 
 */
 
+void cpra_display_type(CXType type)
+{
+  CXString str = clang_getTypeKindSpelling(type.kind);
+  printf(" %s",clang_getCString(str));
+  clang_disposeString(str);
+}
+
 static int cpra_element_display_cb(struct ll* list,void *data)
 {
   struct cpra_element *elem=cpra_element_get(list);
+  enum cpra_element_id id=(enum cpra_element_id)data;
 
-  const char * s4r = clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(elem->cursor)));
-  const char * s3r = clang_getCString(clang_getCursorDisplayName(elem->cursor));
+  /* const char * s4r = clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(elem->cursor))); */
+  /* const char * s3r = clang_getCString(clang_getCursorDisplayName(elem->cursor)); */
 
-  printf("elem %p cursorkind %s spelling: %s",elem,s4r,s3r);
+  CXString element_name;
+
+  element_name=clang_getCursorDisplayName(elem->cursor);
+
+  /* don't display empty elements */
+  if(clang_getCString(element_name)[0] == 0) {
+    clang_disposeString(element_name);
+    return 1;
+  }
+
+  /* printf("elem %p cursorkind %s spelling: %s",elem,s4r,s3r); */
+
+  if(id == CPRA_ELEM_VAR) {
+    int ptrdepth=0;
+    CXType type = clang_getCursorType(elem->cursor);
+
+    while(type.kind == CXType_Pointer) {
+      ptrdepth++;
+      type=clang_getPointeeType(type);
+    }
+
+    cpra_display_type(type);
+    for(;ptrdepth>0;ptrdepth--)
+      putchar('*');
+
+    /*
+    CXString str = clang_getTypeKindSpelling(type.kind);
+    printf("%s",clang_getCString(str));    
+    clang_disposeString(str);
+    */
+  }
+
+  /* TODO display element */
+  printf(" %s",clang_getCString(element_name));
+  clang_disposeString(element_name);
+
+#if 0
+  /* Spelling */
+  {
+    CXString str;
+    int empty=0;
+
+    str=clang_getCursorDisplayName(elem->cursor);
+
+    if(clang_getCString(str)[0] == 0)
+      empty=1;
+    else
+      printf(" %s",clang_getCString(str));
+    
+    clang_disposeString(str);
+
+    /* don't display if there is nothing to display */
+    if(empty)
+      return 1;
+  }
+#endif
+
+  /* linkage */
+  {
+    char *linkage[] = {"Invalid","auto","static","AnonNamespace","global"};
+    /* if(clang_getCursorLinkage(elem->cursor) == CXLinkage_Internal) */
+    printf(" linkage: %s",linkage[clang_getCursorLinkage(elem->cursor)]);
+
+  }
+
+  /* is definition */
+  {
+    if(clang_isCursorDefinition(elem->cursor))
+      printf(" IsDef");
+  }
 
   /* display location */
   {
@@ -235,9 +312,9 @@ static int cpra_element_display_cb(struct ll* list,void *data)
   return 1;
 }
 
-void cpra_element_display(struct cpra_element *cel)
+void cpra_element_display(struct cpra_element *cel,enum cpra_element_id id)
 {
-  ll_traverse(&cel->link,cel,cpra_element_display_cb);
+  ll_traverse(&cel->link,(void *)id,cpra_element_display_cb);
 }
 
 void testprog()
@@ -501,8 +578,9 @@ int main(int argc, const char * const argv[])
     if(!cpra_elements[i])
       continue;
     
-    cpra_element_display(cpra_elements[i]);
     printf("%s\n",cpra_element_names[i]);
+
+    cpra_element_display(cpra_elements[i],i);
     cpra_element_rm_all(&cpra_elements[i]);
   }
 
