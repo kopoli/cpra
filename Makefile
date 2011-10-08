@@ -2,7 +2,7 @@
 PROG=cpra cpra_test
 SRC=cpra.c
 
-CFLAGS=-Wall -ggdb -O0
+CFLAGS=-Wall -ggdb -O0 -std=c99 -D_XOPEN_SOURCE
 LDFLAGS=-L/usr/lib/llvm -lclang
 CC=gcc
 
