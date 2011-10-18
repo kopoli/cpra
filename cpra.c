@@ -2,11 +2,13 @@
    Features:
    -list: methods, functions, structs, enums, types, statics, includes
    -check syntax (no printing, other than errors)
+    -tämä on, kuin ei antaisi mitään argumentteja ohjelmalle
    -code completion (normal clang operation)
 
    other:
    -whereis: funktioille, luokille, tyypeille, muuttujille, vakioille
     -missä määritelty ja missä käytetään.
+   -Tämä on sama kuin yo. jota on sitten grepattu
 
    Suunnitelmaa:
    -laita listaan kaikki halutut eri elementit, tulosta lopuksi järjestyksessä
@@ -103,6 +105,47 @@ int ll_length(struct ll* list)
   return count;
 }
 
+/* command line definitions */
+
+static char *const CPRA_CMDLINE_OPTS="fstvmirca:w:hV";
+
+static char * const cpra_opt_help[] = {
+  "list functions/methods",
+  "list structs/classes",
+  "list types/enums",
+  "list static variables",
+  "list macros",
+  "list includes",
+  "list references also for above",
+  "syntax check",
+  "run code completion",
+  "file:line:col",
+  "where is the element used",
+  "type|class|func|var|constant",
+  "display this help",
+  "display program version"
+};
+
+enum cpra_opts {
+  /* this first part should be in the same order as enum cpra_element_id */
+  CPRA_OPT_FUNCS=0,
+  CPRA_OPT_STRUCTS,
+  CPRA_OPT_TYPES,
+  CPRA_OPT_VARIABLES,
+  CPRA_OPT_MACROS,
+  CPRA_OPT_INCLUDES,
+  /* other functionality */
+  CPRA_OPT_REFS,
+  CPRA_OPT_CHECK,
+  CPRA_OPT_COMPLETE,
+  CPRA_OPT_WHEREIS,
+  CPRA_OPT_HELP,
+  CPRA_OPT_VERSION,
+  CPRA_OPT_COUNT,
+} ;
+
+static char * const cpra_opt_enabled="enabled";
+static char *cpra_opts_status[CPRA_OPT_COUNT];
 
 /* -- */
 
@@ -213,6 +256,57 @@ void cpra_display_type(CXType type)
   clang_disposeString(str);
 }
 
+void cpra_display_name(CXCursor cursor, int depth)
+{
+  CXString name;
+  char const *str;
+
+  if(0)
+  {
+    CXString type=clang_getCursorKindSpelling(cursor.kind);
+    printf("depth %d kind %s\n",depth,clang_getCString(type));
+    clang_disposeString(type);
+  }
+
+  if(depth > 10)
+    exit(7);
+  
+  /* TODO should use: clang_isInvalid, clang_isTranslationUnit, clang_isUnexposed */
+  switch(cursor.kind) {
+  case CXCursor_InvalidFile:
+  case CXCursor_UnexposedDecl:
+    return;
+  default:
+    cpra_display_name(clang_getCursorSemanticParent(cursor),depth+1);
+    break;
+  }
+
+  /*
+    clang_getCursorSemanticParent appears to have a bug of sorts. The code:
+    void f() {
+      struct { int a; } s;
+      int b;
+      s.a=1;
+    }
+    The last refecence has the name with parents: f()::b::a
+    b should not be its semantic parent (?)
+
+    The following is a workaround:
+   */
+  if(depth != 0 && cursor.kind == CXCursor_VarDecl)
+    return;
+
+  name=clang_getCursorDisplayName(cursor);
+  str=clang_getCString(name);
+  if(0) {
+    printf("(");
+    cpra_display_type(clang_getCursorType(cursor));
+    printf(")");
+  }
+  printf("%s%s",strlen(str)>0 ? str : "<anonymous>", depth > 0 ? "::" : "");
+  clang_disposeString(name);
+}
+
 static int cpra_element_display_cb(struct ll* list,void *data)
 {
   struct cpra_element *elem=cpra_element_get(list);
@@ -237,6 +331,13 @@ static int cpra_element_display_cb(struct ll* list,void *data)
       type=clang_getPointeeType(type);
     }
 
+    if(clang_isConstQualifiedType(type))
+      printf(" const");
+    if(clang_isVolatileQualifiedType(type))
+      printf(" volatile");
+    if(clang_isRestrictQualifiedType(type))
+      printf(" restrict");
+
     cpra_display_type(type);
     for(;ptrdepth>0;ptrdepth--)
       putchar('*');
@@ -245,33 +346,43 @@ static int cpra_element_display_cb(struct ll* list,void *data)
     char *type="";
     
     /* TODO a switch perhaps ? */
-    if(elem->cursor.kind == CXCursor_StructDecl)
-      type="Struct";
-    else if(elem->cursor.kind == CXCursor_UnionDecl)
-      type="Union";
-    else if(elem->cursor.kind == CXCursor_ClassDecl)
-      type="Class";
-
+    switch(elem->cursor.kind) {
+    case CXCursor_StructDecl:
+      type="Struct"; break;
+    case CXCursor_UnionDecl:
+      type="Union"; break;
+    case CXCursor_ClassDecl:
+      type="Class"; break;
+    case CXCursor_Namespace:
+      type="Namespace"; break;
+    default:
+      type="UnknownRecord"; break;
+    }
     printf(" %s",type);
   }
 
-  printf(" %s",clang_getCString(element_name));
+  putchar(' ');
+  cpra_display_name(elem->cursor,0);
+  /* printf(" %s",clang_getCString(element_name)); */
   clang_disposeString(element_name);
 
   /* linkage */
   if(id != CPRA_ELEM_MACRO && id != CPRA_ELEM_INCLUDE)
   {
-    char *linkage[] = {"Invalid","auto","static","AnonNamespace","global"};
-    /* if(clang_getCursorLinkage(elem->cursor) == CXLinkage_Internal) */
-    printf(" linkage: %s",linkage[clang_getCursorLinkage(elem->cursor)]);
+    char const *linkage[] = {"Invalid","auto","static","AnonNamespace","global"};
+    int linkvalue=clang_getCursorLinkage(elem->cursor);
+    if(linkvalue > 0)
+      printf(" linkage: %s",linkage[linkvalue]);
 
   }
 
-  /* is definition */
-  {
-    if(clang_isCursorDefinition(elem->cursor))
-      printf(" IsDef");
-  }
+  /*is definition */
+  if(clang_isCursorDefinition(elem->cursor))
+    printf(" IsDef");
+
+  /* If references are enabled, is declaration */
+  if(cpra_opts_status[CPRA_OPT_REFS] && clang_isDeclaration(elem->cursor.kind))
+    printf(" IsDecl");
 
   /* display location */
   {
@@ -309,41 +420,6 @@ void testprog()
 
   exit(7);
 }
-
-static char *const CPRA_CMDLINE_OPTS="cfstvma:w:hV";
-
-static char * const cpra_opt_help[] = {
-  "syntax check",
-  "list functions/methods",
-  "list structs/classes",
-  "list types/enums",
-  "list static variables",
-  "list macros",
-  "run code completion",
-  "file:line:col",
-  "where is the element used",
-  "type|class|func|var|constant",
-  "display this help",
-  "display program version"
-};
-
-enum cpra_opts {
-  CPRA_OPT_CHECK=0,
-  CPRA_OPT_FUNCS,
-  CPRA_OPT_STRUCTS,
-  CPRA_OPT_TYPES,
-  CPRA_OPT_VARIABLES,
-  CPRA_OPT_MACROS,
-  CPRA_OPT_COMPLETE,
-  CPRA_OPT_WHEREIS,
-  CPRA_OPT_HELP,
-  CPRA_OPT_VERSION,
-  CPRA_OPT_COUNT,
-} ;
-
-static char * const cpra_opt_enabled="enabled";
-static char *cpra_opts_status[CPRA_OPT_COUNT];
-
 
 void cpra_version_quit()
 {
@@ -385,6 +461,9 @@ int cpra_cmdline_parse(int argc, const char * const argv[])
 {
   int opt,i,limit=ARRAY_SIZE(cpra_opts_status);
 
+  if(argc == 1)
+    cpra_help_quit(argv[0]);
+
   memset(cpra_opts_status,0,sizeof(cpra_opts_status));
 
   while((opt = getopt(argc,(char *const *)argv,CPRA_CMDLINE_OPTS)) != -1 ) {
@@ -414,32 +493,6 @@ enum CXChildVisitResult cb(CXCursor cursor,
 			   CXCursor parent,
 			   CXClientData client_data)
 {
-
-#if 0
-  const char * str = clang_getCString(clang_getTypeKindSpelling(clang_getCursorType(cursor).kind));
-  /* const char * s3r = clang_getCString(clang_getCursorUSR(cursor)); */
-  const char * s3r = clang_getCString(clang_getCursorDisplayName(cursor));
-
-  const char * s4r = clang_getCString(clang_getCursorKindSpelling(clang_getCursorKind(cursor)));
-
-  CXSourceLocation loc = clang_getCursorLocation(cursor);
-  unsigned int line,col;
-  CXFile f;
-  const char *s2r;
-  clang_getSpellingLocation(loc,&f,&line,&col,NULL);
-  s2r = clang_getCString(clang_getFileName(f));
-
-  if(s2r != NULL)
-    printf("kind %d:[%s] type [%s] isdef %d spelling {%s} at %s %d:%d\n",
-	   cursor.kind,s4r,str,clang_isCursorDefinition(cursor),s3r,
-	   s2r,line,col);
-
-  if(clang_getCursorKind(cursor) == CXCursor_FunctionDecl) {
-    cpra_element_add(&cpra_elements[CPRA_ELEM_FUNC],cursor);
-    printf("LÖYTYI!!!!! ja kind %d\n",clang_getCursorKind(cursor));
-  }
-#endif
-
   enum cpra_element_id cid=CPRA_ELEM_COUNT;
   unsigned int line, col;
   CXFile f;
@@ -457,6 +510,8 @@ enum CXChildVisitResult cb(CXCursor cursor,
 
   switch(cursor.kind) {
   case CXCursor_FunctionDecl:
+  case CXCursor_Constructor:
+  case CXCursor_Destructor:
   case CXCursor_CXXMethod:
     cid=CPRA_ELEM_FUNC;
     break;
@@ -464,6 +519,7 @@ enum CXChildVisitResult cb(CXCursor cursor,
   case CXCursor_StructDecl:
   case CXCursor_UnionDecl:
   case CXCursor_ClassDecl:
+  case CXCursor_Namespace:
     cid=CPRA_ELEM_STRUCT;
     break;
     
@@ -489,8 +545,34 @@ enum CXChildVisitResult cb(CXCursor cursor,
   default:
     break;
   }
+  
+  /* list also references of above types */
+  if(cpra_opts_status[CPRA_OPT_REFS]) {
+    switch(cursor.kind) {
+    case CXCursor_CallExpr:
+      cid=CPRA_ELEM_FUNC;
+      break;
+
+    case CXCursor_TypeRef:
+      cid=CPRA_ELEM_TYPE;
+      break;
+    
+    case CXCursor_MemberRef:
+    case CXCursor_MemberRefExpr:
+    case CXCursor_DeclRefExpr:
+      cid=CPRA_ELEM_VAR;
+      break;
+
+    default:
+      break;
+
+    }
+  }
 
   if(cid != CPRA_ELEM_COUNT) {
+
+    /* TODO DEBUG */
+    if(0)
     {
       const char * str = clang_getCString(clang_getTypeKindSpelling(clang_getCursorType(cursor).kind));
       const char * s3r = clang_getCString(clang_getCursorDisplayName(cursor));
@@ -506,9 +588,9 @@ enum CXChildVisitResult cb(CXCursor cursor,
       printf("kind %d:[%s] type [%s] isdef %d spelling {%s} at %s %d:%d\n",
 	     cursor.kind,s4r,str,clang_isCursorDefinition(cursor),s3r,
 	     s2r,line,col);
+      printf("adding element %d\n",cid);
     }
 
-    printf("adding element %d\n",cid);
     cpra_element_add(&cpra_elements[cid],cursor);
   }  
 
@@ -553,6 +635,12 @@ int main(int argc, const char * const argv[])
   clang_visitChildren(clang_getTranslationUnitCursor(ctu),
 		      cb,NULL);
 
+  if(cpra_opts_status[CPRA_OPT_CHECK]) {
+    int ret=clang_getNumDiagnostics(ctu);
+    printf("Warnings/errors: %d\n",ret);
+    return !!ret;
+  }
+
   {
     CXString str=clang_getTranslationUnitSpelling(ctu);
     printf("File: %s\n",clang_getCString(str));
@@ -561,7 +649,7 @@ int main(int argc, const char * const argv[])
   
   printf("\nDisplaying elements\n");
   for(i=0;i<CPRA_ELEM_COUNT;i++) {
-    if(!cpra_elements[i])
+    if(!cpra_elements[i] || !cpra_opts_status[i])
       continue;
     
     printf("%s\n",cpra_element_names[i]);
