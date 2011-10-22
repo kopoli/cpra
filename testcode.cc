@@ -9,13 +9,14 @@ public:
   Jotain();
   virtual ~Jotain();
 
+  int m_value;
+
   static int muumi(int argumentti) {int sisa=argumentti+1;};
 
-  int m_value;
+  int toinenfunc(int arg) {m_value=arg*2;}
 
 };
 
-}
 
 struct Toinen {
   int arvo;
@@ -25,8 +26,12 @@ Jotain::Jotain() {
   
 }
 
+}
+
 int main(int argc, char *argv[])
 {
+  JepJep::Jotain j;
+  j.m_value=15;
   
   return 0;
 }

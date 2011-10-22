@@ -249,14 +249,37 @@ void cpra_element_rm_all(struct cpra_element **cel)
   -tiedostonnimi clang_getIncludedFile
 */
 
-void cpra_display_type(CXType type)
+static void cpra_display_location(char const *format,CXCursor cursor)
 {
-  CXString str = clang_getTypeKindSpelling(type.kind);
-  printf(" %s",clang_getCString(str));
+  CXSourceLocation loc = clang_getCursorLocation(cursor);
+  unsigned int line,col;
+  CXFile file;
+  CXString str;
+  
+  clang_getSpellingLocation(loc,&file,&line,&col,NULL);
+  str=clang_getFileName(file);
+  printf(format,clang_getCString(str),line,col);
   clang_disposeString(str);
 }
 
-void cpra_display_name(CXCursor cursor, int depth)
+static void cpra_display_name(CXCursor cursor, int depth);
+
+static void cpra_display_type(CXType type)
+{
+  if(type.kind == CXType_Unexposed) {
+    CXCursor cursor=clang_getTypeDeclaration(type);
+
+    putchar(' ');
+    cpra_display_name(cursor,0);
+  }
+  else {
+    CXString str = clang_getTypeKindSpelling(type.kind);
+    printf(" %s",clang_getCString(str));
+    clang_disposeString(str);
+  }
+}
+
+static void cpra_display_name(CXCursor cursor, int depth)
 {
   CXString name;
   char const *str;
@@ -298,33 +321,59 @@ void cpra_display_name(CXCursor cursor, int depth)
 
   name=clang_getCursorDisplayName(cursor);
   str=clang_getCString(name);
-  if(0) {
+
+  if(0) 
+  {
     printf("(");
     cpra_display_type(clang_getCursorType(cursor));
     printf(")");
   }
-  printf("%s%s",strlen(str)>0 ? str : "<anonymous>", depth > 0 ? "::" : "");
-  clang_disposeString(name);
+
+  /* if anonymous */
+  if(strlen(str)==0)
+    cpra_display_location("<anon-%s:%d:%d>",cursor);
+  else 
+    printf("%s",str);
+  if(depth>0)
+    printf("::");
+
+  /* printf("%s%s",strlen(str)>0 ? str : "<anon>", depth > 0 ? "::" : ""); */
+  /* clang_disposeString(name); */
 }
 
+/* TODO 
+   - Funktiokutsujen tyypeille pitää tehdä jotain 
+
+   - testcode.c:ssä bugi globaalin rakenteen muuttujien tyypeissä (raken ja
+     raken_var)
+*/
 static int cpra_element_display_cb(struct ll* list,void *data)
 {
   struct cpra_element *elem=cpra_element_get(list);
   enum cpra_element_id id=(enum cpra_element_id)data;
-  CXString element_name;
 
-  element_name=clang_getCursorDisplayName(elem->cursor);
+  CXCursor tr_cursor;
 
-  /* don't display empty elements */
-  if(clang_getCString(element_name)[0] == 0) {
+    /* don't display empty elements */
+  {
+    CXString element_name=clang_getCursorDisplayName(elem->cursor);
+    int empty=clang_getCString(element_name)[0] == 0;
+
     clang_disposeString(element_name);
-    return 1;
+
+    if(empty) 
+      return 1;
   }
+
+  /* for types and names search for the definition */
+  tr_cursor = clang_getCursorDefinition(elem->cursor);
+  if(clang_equalCursors(clang_getNullCursor(),tr_cursor))
+    tr_cursor = elem->cursor;
 
   if(id == CPRA_ELEM_VAR || id == CPRA_ELEM_FUNC) {
     int ptrdepth=0;
-    CXType type = id == CPRA_ELEM_VAR ? clang_getCursorType(elem->cursor) :
-      clang_getCursorResultType(elem->cursor);
+    CXType type = id == CPRA_ELEM_VAR ? clang_getCursorType(tr_cursor) :
+      clang_getCursorResultType(tr_cursor);
 
     while(type.kind == CXType_Pointer) {
       ptrdepth++;
@@ -345,8 +394,7 @@ static int cpra_element_display_cb(struct ll* list,void *data)
   else if (id == CPRA_ELEM_STRUCT) {
     char *type="";
     
-    /* TODO a switch perhaps ? */
-    switch(elem->cursor.kind) {
+    switch(tr_cursor.kind) {
     case CXCursor_StructDecl:
       type="Struct"; break;
     case CXCursor_UnionDecl:
@@ -362,15 +410,13 @@ static int cpra_element_display_cb(struct ll* list,void *data)
   }
 
   putchar(' ');
-  cpra_display_name(elem->cursor,0);
-  /* printf(" %s",clang_getCString(element_name)); */
-  clang_disposeString(element_name);
+  cpra_display_name(tr_cursor,0);
 
   /* linkage */
   if(id != CPRA_ELEM_MACRO && id != CPRA_ELEM_INCLUDE)
   {
     char const *linkage[] = {"Invalid","auto","static","AnonNamespace","global"};
-    int linkvalue=clang_getCursorLinkage(elem->cursor);
+    int linkvalue=clang_getCursorLinkage(tr_cursor);
     if(linkvalue > 0)
       printf(" linkage: %s",linkage[linkvalue]);
 
@@ -385,7 +431,9 @@ static int cpra_element_display_cb(struct ll* list,void *data)
     printf(" IsDecl");
 
   /* display location */
-  {
+  cpra_display_location(" at %s %d:%d",elem->cursor);
+
+  if(0) {
     CXSourceLocation loc = clang_getCursorLocation(elem->cursor);
     unsigned int line,col;
     CXFile file;
@@ -481,10 +529,11 @@ int cpra_cmdline_parse(int argc, const char * const argv[])
       }
   }
 
-  for(i=0;i<limit;i++) {
-    if(cpra_opts_status[i])
-      printf("%c %s\n",CPRA_CMDLINE_OPTS[i],cpra_opts_status[i]);
-  }
+  //TODO debug
+  /* for(i=0;i<limit;i++) { */
+  /*   if(cpra_opts_status[i]) */
+  /*     printf("%c %s\n",CPRA_CMDLINE_OPTS[i],cpra_opts_status[i]); */
+  /* } */
 
   return optind;
 }

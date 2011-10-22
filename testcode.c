@@ -23,6 +23,8 @@ int main(int argc, char *argv[])
     } reku;
    } status = {};
 
+  struct raken raken_var = {.a=3, .b=14};
+
   const restrict volatile char *vali;
   /* int Hamays=30; */
 
