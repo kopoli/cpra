@@ -5,11 +5,6 @@
     -tämä on, kuin ei antaisi mitään argumentteja ohjelmalle
    -code completion (normal clang operation)
 
-   other:
-   -whereis: funktioille, luokille, tyypeille, muuttujille, vakioille
-    -missä määritelty ja missä käytetään.
-   -Tämä on sama kuin yo. jota on sitten grepattu
-
    Suunnitelmaa:
    -laita listaan kaikki halutut eri elementit, tulosta lopuksi järjestyksessä
     -tarvitaan linkitetty lista, jossa lisäys, walk ja koko listan poisto
@@ -107,7 +102,7 @@ int ll_length(struct ll* list)
 
 /* command line definitions */
 
-static char *const CPRA_CMDLINE_OPTS="fstvmirca:w:hV";
+static char *const CPRA_CMDLINE_OPTS="fstvmirca:hV";
 
 static char * const cpra_opt_help[] = {
   "list functions/methods",
@@ -120,8 +115,6 @@ static char * const cpra_opt_help[] = {
   "syntax check",
   "run code completion",
   "file:line:col",
-  "where is the element used",
-  "type|class|func|var|constant",
   "display this help",
   "display program version"
 };
@@ -138,7 +131,6 @@ enum cpra_opts {
   CPRA_OPT_REFS,
   CPRA_OPT_CHECK,
   CPRA_OPT_COMPLETE,
-  CPRA_OPT_WHEREIS,
   CPRA_OPT_HELP,
   CPRA_OPT_VERSION,
   CPRA_OPT_COUNT,
