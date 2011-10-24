@@ -1,0 +1,42 @@
+cpra
+
+A command line wrapper for the libclang library.
+
+Uses libclang to parse and display various information on a source code file.
+
+
+Updates
+2011-10-24 - initial
+
+
+Requirements:
+
+- A very recent clang (tested with 2.9)
+
+
+Compilation:
+
+make
+
+You might need to adjust the makefile to suit your needs. Some automated unit
+testing program is automatically built. It can be run with the command:
+
+make test
+or
+./cpra_test
+
+To display the available options run the following:
+
+./cpra -h
+
+
+Example run:
+
+./cpra -vr -- testcode.cc | grep m_value
+ Int JepJep::Jotain::m_value linkage: global IsDef IsDecl at testcode.cc 12:7
+ Int JepJep::Jotain::m_value linkage: global at testcode.cc 16:28
+ Int JepJep::Jotain::m_value linkage: global at testcode.cc 34:5
+
+This displays the full name of the variable m_value with the lines it is
+defined and used.
+
