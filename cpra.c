@@ -1,16 +1,21 @@
 /* 
-   Features:
-   -list: methods, functions, structs, enums, types, statics, includes
-   -check syntax (no printing, other than errors)
-    -tämä on, kuin ei antaisi mitään argumentteja ohjelmalle
-   -code completion (normal clang operation)
+   crpa - A small command line interface to libclang.
 
-   Suunnitelmaa:
-   -laita listaan kaikki halutut eri elementit, tulosta lopuksi järjestyksessä
-    -tarvitaan linkitetty lista, jossa lisäys, walk ja koko listan poisto
+   Copyright (C) 2011  Kalle Kankare
 
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 
 #include <stdio.h> 
 #include <stdlib.h>
@@ -213,34 +218,6 @@ void cpra_element_rm_all(struct cpra_element **cel)
   *cel=NULL;
 }
 
-
-/*
-  Tulostetaan:
-
-  Yleisesti:
-  -mitä kieltä käytetään: clang_getCursorLanguage
-
-  Jokaisesta
-  -nimi clang_getCursorDisplayName
-  -tiedosto:rivi:sarake clang_getCursorLocation
-                        clang_getSpellingLocation
-  -onko määrittely: clang_isCursorDefinition
-
-  funktioista:
-  -paluuarvon tyyppi clang_getCursorResultType
-
-  metodeista:
-  -luokka
-  -onko se periytetty clang_getOverriddenCursors
-
-  (globaaleista) muuttujista:
-  -tyyppi
-  -(onko globaali) clang_getCursorSemanticParent == ctu
-
-  Includeista
-  -tiedostonnimi clang_getIncludedFile
-*/
-
 static void cpra_display_location(char const *format,CXCursor cursor)
 {
   CXSourceLocation loc = clang_getCursorLocation(cursor);
@@ -334,9 +311,9 @@ static void cpra_display_name(CXCursor cursor, int depth)
 }
 
 /* TODO 
-   - Funktiokutsujen tyypeille pitää tehdä jotain 
+   - Types of function calls 
 
-   - testcode.c:ssä bugi globaalin rakenteen muuttujien tyypeissä (raken ja
+   - testcode.c exposes a bug within an instantiation of a global structure (raken ja
      raken_var)
 */
 static int cpra_element_display_cb(struct ll* list,void *data)
@@ -447,18 +424,6 @@ static int cpra_element_display_cb(struct ll* list,void *data)
 void cpra_element_display(struct cpra_element *cel,enum cpra_element_id id)
 {
   ll_traverse(&cel->link,(void *)id,cpra_element_display_cb);
-}
-
-void testprog()
-{
-  struct aba {
-    int elementti;
-    struct ll link;
-  } jeeje;
-
-  printf("jj %p ja %p\n",&jeeje,container_of(&jeeje.link,struct aba,link));
-
-  exit(7);
 }
 
 void cpra_version_quit()
@@ -653,8 +618,6 @@ int main(int argc, const char * const argv[])
     int index;
     int translation;
   } s = {};
-
-  /* testprog(); */
   
   CXIndex ci = clang_createIndex(1,1);
   s.index=1;
