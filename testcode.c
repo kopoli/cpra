@@ -13,6 +13,12 @@ struct raken {
 
 char *variable;
 
+void f() {
+  struct { int a; } s;
+  int b;
+  s.a=1;
+}
+
 int main(int argc, char *argv[])
 {
   struct {
@@ -25,9 +31,10 @@ int main(int argc, char *argv[])
 
   struct raken raken_var = {.a=3, .b=14};
 
-  const restrict volatile char *vali;
+  const volatile char *vali;
   /* int Hamays=30; */
 
+  f();
 
   status.translation=1;
   status.sisalla=status.translation*3;
@@ -35,10 +42,4 @@ int main(int argc, char *argv[])
   vali=3;
   
   return 0;
-}
-
-void f() {
-  struct { int a; } s;
-  int b;
-  s.a=1;
 }
